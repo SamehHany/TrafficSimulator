@@ -1,0 +1,178 @@
+#include <iostream>
+#include <vector>
+#include <sstream>
+#include <sys/time.h>
+#include <vector>
+#include "Object2D.h"
+#include "Road.h"
+#include "Car.h"
+
+using namespace std;
+
+const GLfloat WindowWidth = 900;
+const GLfloat WindowHeight = 600;
+
+const GLfloat _hscale = (GLfloat)1/450; // horizontal scale
+const GLfloat _vscale = (GLfloat)1/300; // vertical scale
+
+const char *file_path = "traffic_flow.txt";
+
+GLuint __action;
+GLuint __hscale;
+GLuint __vscale;
+GLuint __scale;
+GLuint __rot;
+GLuint __x_trans_cent;
+GLuint __y_trans_cent;
+GLuint __x_trans;
+GLuint __y_trans;
+aaascxxx
+//GLuint action, rotation;
+
+vector<Object2D*> objects;
+
+Circle *sign;
+Road *road1, *road2;
+Car **cars;
+int no_cars;
+
+GLfloat playspeed = 4;
+
+void init( void )
+{
+	// Load shaders and use the resulting shader program
+	Object2D::shaderProgram = InitShader( "vshader.glsl", "fshader.glsl" );
+	glUseProgram( Object2D::shaderProgram );
+	
+	__action = glGetUniformLocation(Object2D::shaderProgram, "action");
+	__hscale = glGetUniformLocation(Object2D::shaderProgram, "hscale");
+	__vscale = glGetUniformLocation(Object2D::shaderProgram, "vscale");
+	__scale = glGetUniformLocation(Object2D::shaderProgram, "scale");
+	__rot = glGetUniformLocation(Object2D::shaderProgram, "rot");
+	__x_trans_cent = glGetUniformLocation(Object2D::shaderProgram, "x_trans_cent");
+	__y_trans_cent = glGetUniformLocation(Object2D::shaderProgram, "y_trans_cent");
+	__x_trans = glGetUniformLocation(Object2D::shaderProgram, "x_trans");
+	__y_trans = glGetUniformLocation(Object2D::shaderProgram, "y_trans");
+	
+	glUniform1i(__action, _NO_ACTION);
+	glUniform1f(__hscale, _hscale);
+	glUniform1f(__vscale, _vscale);
+	glUniform1f(__scale, 1.0f);
+	glUniform1f(__rot, 0.0f);
+	glUniform1f(__x_trans_cent, 0.0f);
+	glUniform1f(__y_trans_cent, 0.0f);
+	glUniform1f(__x_trans, 0.0f);
+	glUniform1f(__y_trans, 0.0f);
+	
+	Point center(-400.0, 250.0);
+	sign = new Circle(center, 30, 30, green);
+	center = Point(0, 0);
+	
+	road1 = new UTurn(590, 200, 75, 75, 155);
+	road2 = new UTurn(590, 120, 75, 75, 155);
+	road2->direction = 1;
+	//road->direction = 1;
+	
+	cars = readCars(file_path, no_cars, road1, road2);
+
+	glClearColor( 0.0, 0.39, 0.0, 1.0 ); // green background
+}
+
+int frameCount = 0;
+
+inline time_t get_time();
+
+vector<Car*> disp_cars;
+int index = 0;
+void display()
+{
+	frameCount++;
+
+	glClear( GL_COLOR_BUFFER_BIT );     // clear the window
+	
+	sign->render();	
+	road1->display();
+	road2->display();
+	if (cars[index]) {
+		disp_cars.push_back(cars[index++]);
+	}
+	for (int i = 0; i < disp_cars.size(); i++) {
+		if ( disp_cars[i]->display(get_time()) == -100)
+			disp_cars.erase( disp_cars.begin() + i );
+	}
+	//cars[3]->display(get_time());
+	
+	glFlush();
+}
+
+void cleanup() {
+	//destroy shaders
+	glUseProgram(0);
+	glDeleteProgram(Object2D::shaderProgram);
+	//destroy shapes and its vertices
+	delete sign;
+	delete road1;
+	delete road2;
+	deleteCars(cars, no_cars);
+}
+
+//void idle() {
+//    glutPostRedisplay();
+//}
+//----------------------------------------------------------------------------
+
+time_t start_time = 0;
+
+inline time_t get_time() {
+	static timeval tm;
+	gettimeofday(&tm, 0);
+	
+	return playspeed * (tm.tv_sec * 1000 + tm.tv_usec * 0.001 - start_time);
+}
+
+void timerFunc(int value) {
+
+    if (value != 0){ //not the first call
+        stringstream ss;
+        ss << "FPS: " << frameCount  * 4 << " -- time: " << get_time() << " -- play speed: " << playspeed;
+        glutSetWindowTitle(ss.str().c_str());
+    }
+    
+    glutPostRedisplay();
+
+    //reset frame count to 0
+    frameCount = 0;
+    //call the function again after 250 milli-seconds
+    glutTimerFunc ( 1000 * _TIME_FRAC, timerFunc, 1 );
+}
+
+int main(int argc, char **argv)
+{
+	// Randome seeding
+	FILE *fp = fopen("/dev/urandom", "r");
+	long long seed;
+	fread(&seed, sizeof(seed), 1, fp);
+	fclose(fp);
+	srand(seed);
+	// End of random seeding
+	
+	glutInit( &argc, argv );
+	glutInitDisplayMode( GLUT_RGBA );
+	glutInitWindowSize( WindowWidth, WindowHeight);
+	glutCreateWindow( "Assignment 1" );
+	glewInit();
+	init();
+	//glutIdleFunc( idle );
+	glutTimerFunc( 1000 * _TIME_FRAC, timerFunc, 0 );
+	glutDisplayFunc( display );
+	//glutKeyboardFunc( keyboard );
+	glutCloseFunc(cleanup);
+	
+	timeval tm;
+	gettimeofday(&tm, 0);
+	start_time = tm.tv_sec * 1000 + tm.tv_usec * 0.001;
+	
+	glutMainLoop();
+	
+	return 0;
+}
